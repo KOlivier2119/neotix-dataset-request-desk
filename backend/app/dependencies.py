@@ -29,7 +29,11 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 
 def require_role(*roles: str):
-    """Returns a FastAPI dependency that enforces the user has one of the given roles."""
+    """Returns a FastAPI dependency that enforces the user has one of the given roles.
+
+    Usage: current_user: User = Depends(require_role("admin", "operator"))
+    Returns 403 if the authenticated user's role is not in the allowed list.
+    """
     def dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
