@@ -25,6 +25,24 @@ class UserRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ---------- Auth ----------
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+    organisation: str | None
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
 # ---------- Episode ----------
 
 class EpisodeRead(BaseModel):
