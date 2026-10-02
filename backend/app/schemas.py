@@ -43,6 +43,21 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ---------- User management ----------
+
+class CreateUserRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+    role: str
+    organisation: str | None = None
+
+
+class UpdateUserRequest(BaseModel):
+    role: str | None = None
+    is_active: bool | None = None
+
+
 # ---------- Episode ----------
 
 class EpisodeRead(BaseModel):
