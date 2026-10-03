@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, String, func
+from sqlalchemy import CheckConstraint, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -48,5 +48,58 @@ class Episode(Base):
     operator_name: Mapped[str] = mapped_column(String, nullable=False)
     quality: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+
+
+class DatasetRequest(Base):
+    __tablename__ = "dataset_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('submitted','in_progress','delivered','accepted','rejected')",
+            name="ck_dataset_requests_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    episodes_requested: Mapped[int] = mapped_column(nullable=False)
+    deadline: Mapped[datetime] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="submitted")
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+
+
+class RequestStatusHistory(Base):
+    __tablename__ = "request_status_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_requests.id"), nullable=False
+    )
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    to_status: Mapped[str] = mapped_column(String, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+    __table_args__ = (
+        UniqueConstraint("request_id", "episode_id", name="uq_assignments_request_episode"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_requests.id"), nullable=False
+    )
+    episode_id: Mapped[int] = mapped_column(
+        ForeignKey("episodes.id"), nullable=False
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now()
     )

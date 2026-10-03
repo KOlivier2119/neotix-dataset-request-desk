@@ -72,3 +72,45 @@ class EpisodeRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------- Dataset Requests ----------
+
+class RequestCreate(BaseModel):
+    title: str
+    episodes_requested: int
+    deadline: datetime
+
+
+class RequestRead(BaseModel):
+    id: int
+    client_id: int
+    title: str
+    episodes_requested: int
+    deadline: datetime
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StatusHistoryEntry(BaseModel):
+    id: int
+    actor_id: int
+    from_status: str | None
+    to_status: str
+    changed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RequestDetail(RequestRead):
+    history: list[StatusHistoryEntry]
+
+
+class TransitionRequest(BaseModel):
+    to_status: str
+
+
+class AssignmentRequest(BaseModel):
+    episode_ids: list[int]
