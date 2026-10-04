@@ -35,9 +35,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen">
+    <main className="flex min-h-screen flex-col md:flex-row">
       {/* Form side */}
-      <section className="flex w-full flex-col items-center justify-center p-8 md:w-1/2">
+      <section className="order-2 flex w-full flex-col items-center justify-center p-8 md:order-1 md:w-1/2">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#1d1d1f] text-xs font-semibold text-white">
@@ -91,12 +91,13 @@ export default function LoginPage() {
       </section>
 
       {/* Image side */}
-      <section className="relative hidden md:block md:w-1/2">
+      <section className="relative order-1 h-48 w-full overflow-hidden md:order-2 md:h-auto md:w-1/2">
         <Image
           src="/robot.jpeg"
           alt="Robot arm"
           fill
-          priority
+          preload
+          sizes="(max-width: 768px) 100vw, 50vw"
           className="object-cover"
         />
       </section>

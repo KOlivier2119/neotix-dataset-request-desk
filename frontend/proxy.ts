@@ -15,5 +15,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Also skip anything with a file extension: assets in `public/` (images,
+  // fonts, SVGs) must not be redirected to /login or the browser gets HTML
+  // where it expects an image and the login artwork never renders.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
