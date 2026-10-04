@@ -1,0 +1,17 @@
+# Agent task artifacts
+.agents/
+backend/.agents/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Env files (never commit secrets)
+.env
+*.env
+
+# Node
+node_modules/
+.next/
