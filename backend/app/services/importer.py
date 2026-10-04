@@ -116,12 +116,17 @@ def _flush_batch(db: Session, batch: list[dict]) -> tuple[int, int]:
     """Insert a batch idempotently. Returns (imported_count, skipped_existing_count)."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from app.models import Episode
-    stmt = pg_insert(Episode).values(batch).on_conflict_do_nothing(index_elements=["episode_id"])
+    stmt = (
+        pg_insert(Episode)
+        .values(batch)
+        .on_conflict_do_nothing(index_elements=["episode_id"])
+        .returning(Episode.id)
+    )
     result = db.execute(stmt)
+    inserted = len(result.scalars().all())
     db.commit()
-    imported = result.rowcount
-    skipped_existing = len(batch) - imported
-    return imported, skipped_existing
+    skipped_existing = len(batch) - inserted
+    return inserted, skipped_existing
 
 
 def import_csv(db: Session, fileobj) -> dict:
@@ -148,6 +153,11 @@ def import_csv(db: Session, fileobj) -> dict:
             continue
         total_rows += 1
         cleaned, reason = _parse_row(row)
+        if reason == "__blank_row__":
+            # All fields empty/whitespace after normalisation: skip silently,
+            # not counted as rejected or imported.
+            total_rows -= 1
+            continue
         if reason:
             rejected.append({"row": row_num, "reason": reason})
             continue
