@@ -1,0 +1,49 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Services, routers, and tests: create app/services/__init__.py, app/services/workflow.py (TRANSITIONS dict + transition_request), app/services/assignments.py (assign_episodes + unassign_episode), app/routers/requests.py (5 endpoints), app/routers/episodes.py (GET /episodes), register routers in app/main.py, and write tests/test_domain.py covering all spec requirements. Depends on FEAT-001 (models and schemas must exist).",
+  "status": "completed",
+  "steps": [
+    "Create backend/app/services/__init__.py as an empty file.",
+
+    "Create backend/app/services/workflow.py. Define TRANSITIONS: dict mapping each from_status to a list of (to_status, set_of_allowed_roles) tuples. Exact mapping: 'submitted'->[('in_progress',{'operator','admin'})], 'in_progress'->[('delivered',{'operator','admin'})], 'delivered'->[('accepted',{'client'}),('rejected',{'client'})], 'rejected'->[('in_progress',{'operator','admin'})]. Define transition_request(db: Session, request_id: int, to_status: str, actor: User) -> DatasetRequest: (1) load DatasetRequest by id, 404 if missing; (2) find matching (to_status, allowed_roles) in TRANSITIONS[current_status], 409 'Invalid transition: {from} -> {to}' if not found; (3) check actor.role in allowed_roles, 403 if not; (4) for client on delivered->accepted or delivered->rejected, verify request.client_id == actor.id, else 403; (5) for in_progress->delivered: lock row with db.execute(select(DatasetRequest).where(DatasetRequest.id==request_id).with_for_update()).scalar_one(), count assignments via db.query(Assignment).filter(Assignment.request_id==request_id).count(), raise 409 'Need {episodes_requested} assignments, have {count}' if insufficient; (6) update request.status = to_status; (7) insert RequestStatusHistory(request_id=request_id, actor_id=actor.id, from_status=old_status, to_status=to_status); (8) db.commit(); return refreshed request.",
+
+    "Create backend/app/services/assignments.py. Import Session, HTTPException, IntegrityError. Define assign_episodes(db: Session, request: DatasetRequest, episode_ids: list[int], actor: User) -> list[Assignment]: (1) raise 409 if request.status != 'in_progress'; (2) for each episode_id: load Episode (422 if not found), check quality in ('good','usable') else 409 'Episode {id} quality {q} not assignable'; (3) create Assignment, db.add, then db.flush() inside db.begin_nested() savepoint; catch IntegrityError, rollback savepoint, raise 409 'Episode {id} already assigned'; (4) db.commit(); return assignments list. Define unassign_episode(db, request, episode_id): (1) 409 if not in_progress; (2) find Assignment by (request_id, episode_id), 404 if missing; (3) db.delete; db.commit().",
+
+    "Create backend/app/routers/requests.py. Add six endpoints following the pattern in backend/app/routers/users.py (Depends(get_db), Depends(require_role(...))). POST /requests [client]: validate episodes_requested > 0 (422) and deadline > datetime.utcnow() (422); insert DatasetRequest + initial RequestStatusHistory(from_status=None, to_status='submitted') in same transaction; return RequestRead 201. GET /requests [client/operator/admin]: client filters own; operator/admin accepts optional ?status= query param; return list[RequestRead]. GET /requests/{id} [client/operator/admin]: client gets 404 if not owner; load history ordered by changed_at; return RequestDetail. POST /requests/{id}/transition [client/operator/admin]: load request (404), call workflow.transition_request, return RequestRead. POST /requests/{id}/assignments [operator/admin]: load request (404), call assignments.assign_episodes, return {\"assigned\": count}. DELETE /requests/{id}/assignments/{episode_id} [operator/admin]: load request (404), call assignments.unassign_episode, return Response(status_code=204).",
+
+    "Create backend/app/routers/episodes.py. Single endpoint GET /episodes [operator/admin]: query params task_name: str | None = None, quality: str | None = None, unassigned_only: bool = False, limit: int = 50, offset: int = 0. Build db.query(Episode) chain; apply task_name filter if given; apply quality filter if given; if unassigned_only apply .filter(~Episode.id.in_(db.query(Assignment.episode_id))); .offset(offset).limit(limit).all(); return list[EpisodeRead].",
+
+    "Edit backend/app/main.py: add imports for requests_router and episodes_router, then app.include_router(requests_router, prefix='/requests', tags=['requests']) and app.include_router(episodes_router, prefix='/episodes', tags=['episodes']).",
+
+    "Create backend/tests/test_domain.py. Copy the client fixture and make_user helper from test_auth.py verbatim. Add helpers: make_episode(db, episode_id='ep-001', quality='good', task_name='pick') inserts Episode with valid robot_id='arm-01', duration_seconds=60, operator_name='op', recorded_at=datetime.utcnow(); make_request(db, client_user, episodes_requested=2, days_ahead=10) inserts DatasetRequest(status='submitted') + one RequestStatusHistory(from_status=None, to_status='submitted', actor_id=client_user.id); login_as(client, db, role, email_prefix) creates + logs in a user, returns the User. Write these tests: test_operator_can_move_submitted_to_in_progress, test_admin_can_move_submitted_to_in_progress, test_operator_can_move_in_progress_to_delivered (assign 2 episodes first), test_client_can_accept_delivered_request, test_client_can_reject_delivered_request, test_operator_can_move_rejected_to_in_progress, test_invalid_transition_returns_409, test_wrong_role_transition_returns_403, test_other_client_cannot_accept, test_client_cannot_see_other_clients_request, test_client_list_shows_only_own_requests, test_client_cannot_transition_other_clients_request, test_history_row_recorded_with_actor, test_bad_quality_episode_cannot_be_assigned, test_episode_cannot_be_assigned_to_two_requests, test_delivery_blocked_below_count, test_delivery_allowed_at_count, test_rework_keeps_assignments.",
+
+    "Run the full test suite: cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/ -v — all tests pass.",
+
+    "Commit services and routers: git -C /home/fetch/Documents/neotix-dataset-request-desk add backend/app/services backend/app/routers/requests.py backend/app/routers/episodes.py backend/app/main.py && git -C /home/fetch/Documents/neotix-dataset-request-desk commit -m 'feat: add workflow/assignment services and requests/episodes routers'",
+
+    "Commit tests: git -C /home/fetch/Documents/neotix-dataset-request-desk add backend/tests/test_domain.py && git -C /home/fetch/Documents/neotix-dataset-request-desk commit -m 'test: cover transitions, isolation and assignment rules'"
+  ],
+  "acceptance_criteria": [
+    "POST /requests by a client with valid body returns 201 and status 'submitted'",
+    "POST /requests/{id}/transition submitted->in_progress by operator returns 200",
+    "POST /requests/{id}/transition submitted->delivered by operator returns 409",
+    "POST /requests/{id}/transition by client (not owner) on delivered->accepted returns 403",
+    "GET /requests by client returns only that client's requests",
+    "GET /requests/{id} by a different client returns 404",
+    "Assigning a 'bad' quality episode returns 409",
+    "Assigning the same episode to two requests returns 409",
+    "POST /requests/{id}/transition to 'delivered' with insufficient assignments returns 409",
+    "POST /requests/{id}/transition to 'delivered' with exact assignment count returns 200",
+    "After rejected->in_progress rework, assignments are still present",
+    "All history rows have the correct actor_id",
+    "cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/test_domain.py -v — all 18 tests pass",
+    "cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/ -v — all tests pass (test_health, test_logging, test_auth, test_domain)"
+  ],
+  "verification": [
+    "cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/test_domain.py -v",
+    "cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/ -v"
+  ],
+  "blocked_reason": null,
+  "findings": "The DB UNIQUE constraint on assignments is (request_id, episode_id), not (episode_id) alone, so cross-request duplicate assignment requires an explicit pre-check in assign_episodes rather than relying solely on IntegrityError. Added explicit query before insert; savepoint/IntegrityError still present to guard races on the same (request_id, episode_id) pair."
+}
