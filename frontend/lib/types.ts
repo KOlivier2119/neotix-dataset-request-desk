@@ -10,10 +10,12 @@ export interface User {
 export interface RequestItem {
   id: number;
   client_id: number;
+  client_name: string;
   title: string;
   task_name: string;
   notes: string | null;
   episodes_requested: number;
+  assigned_count: number;
   deadline: string;
   status: string;
   created_at: string;
@@ -42,6 +44,14 @@ export interface Episode {
   operator_name: string;
   quality: string;
   created_at: string;
+}
+
+export interface ImportReport {
+  total_rows: number;
+  imported: number;
+  skipped_duplicate_in_file: number;
+  skipped_existing: number;
+  rejected: { row: number; reason: string }[];
 }
 
 export interface AnalyticsDayRobot {

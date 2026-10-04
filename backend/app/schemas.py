@@ -87,10 +87,12 @@ class RequestCreate(BaseModel):
 class RequestRead(BaseModel):
     id: int
     client_id: int
+    client_name: str = ""
     title: str
     task_name: str
     notes: str | None
     episodes_requested: int
+    assigned_count: int = 0
     deadline: datetime
     status: str
     created_at: datetime

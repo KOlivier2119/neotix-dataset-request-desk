@@ -1,18 +1,29 @@
 import { ReactNode } from "react";
 
-export default function Table({ headers, children }: { headers: string[]; children: ReactNode }) {
+export default function Table({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: ReactNode;
+}) {
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr>
-          {headers.map((h) => (
-            <th key={h} className="border-b border-zinc-200 px-2 py-1 text-left dark:border-zinc-800">
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>{children}</tbody>
-    </table>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            {headers.map((h) => (
+              <th
+                key={h}
+                className="border-b border-black/[0.06] pb-2 pr-4 text-left text-xs font-medium uppercase tracking-wide text-[#6e6e73]"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
   );
 }

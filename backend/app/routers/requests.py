@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,6 +20,27 @@ from app.services import assignments as assignment_service
 from app.services import workflow
 
 router = APIRouter()
+
+
+def _enrich(db: Session, reqs) -> None:
+    """Attach client_name and assigned_count attributes to request ORM objects."""
+    if not reqs:
+        return
+    client_ids = {r.client_id for r in reqs}
+    names = {
+        u.id: u.name
+        for u in db.query(User).filter(User.id.in_(client_ids)).all()
+    }
+    request_ids = [r.id for r in reqs]
+    counts = dict(
+        db.query(Assignment.request_id, func.count())
+        .filter(Assignment.request_id.in_(request_ids))
+        .group_by(Assignment.request_id)
+        .all()
+    )
+    for r in reqs:
+        r.client_name = names.get(r.client_id, "")
+        r.assigned_count = counts.get(r.id, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +87,7 @@ def create_request(
     db.add(history)
     db.commit()
     db.refresh(req)
+    _enrich(db, [req])
     return req
 
 
@@ -85,7 +108,9 @@ def list_requests(
     elif request_status is not None:
         query = query.filter(DatasetRequest.status == request_status)
 
-    return query.all()
+    reqs = query.all()
+    _enrich(db, reqs)
+    return reqs
 
 
 # ---------------------------------------------------------------------------
@@ -119,14 +144,17 @@ def get_request(
         .order_by(Assignment.episode_id)
         .all()
     ]
+    _enrich(db, [req])
 
     return RequestDetail(
         id=req.id,
         client_id=req.client_id,
+        client_name=req.client_name,
         title=req.title,
         task_name=req.task_name,
         notes=req.notes,
         episodes_requested=req.episodes_requested,
+        assigned_count=len(assigned_ids),
         deadline=req.deadline,
         status=req.status,
         created_at=req.created_at,
@@ -152,6 +180,7 @@ def transition_request(
         to_status=body.to_status,
         actor=current_user,
     )
+    _enrich(db, [req])
     return req
 
 

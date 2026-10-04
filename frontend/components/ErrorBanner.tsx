@@ -1,8 +1,19 @@
-export default function ErrorBanner({ message }: { message?: string | null }) {
+export default function ErrorBanner({
+  message,
+  onRetry,
+}: {
+  message?: string | null;
+  onRetry?: () => void;
+}) {
   if (!message) return null;
   return (
-    <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-      {message}
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-[#ff3b30]/20 bg-[#ff3b30]/[0.04] px-4 py-3 text-sm text-[#c1272d]">
+      <span>{message}</span>
+      {onRetry && (
+        <button onClick={onRetry} className="font-medium text-[#007aff] hover:underline">
+          Retry
+        </button>
+      )}
     </div>
   );
 }
