@@ -2,6 +2,7 @@
 import io
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +10,7 @@ from app.dependencies import require_role
 from app.models import Assignment, Episode, User
 from app.schemas import EpisodeRead, ImportReport
 from app.services.importer import import_csv
+from app.services.search import like_pattern
 
 router = APIRouter()
 
@@ -17,6 +19,8 @@ router = APIRouter()
 def list_episodes(
     task_name: str | None = None,
     quality: str | None = None,
+    robot_id: str | None = None,
+    q: str | None = None,
     unassigned_only: bool = False,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -30,6 +34,20 @@ def list_episodes(
 
     if quality is not None:
         query = query.filter(Episode.quality == quality)
+
+    if robot_id is not None:
+        query = query.filter(Episode.robot_id == robot_id)
+
+    if q is not None and q.strip():
+        pattern = like_pattern(q.strip())
+        query = query.filter(
+            or_(
+                Episode.episode_id.ilike(pattern, escape="\\"),
+                Episode.robot_id.ilike(pattern, escape="\\"),
+                Episode.task_name.ilike(pattern, escape="\\"),
+                Episode.operator_name.ilike(pattern, escape="\\"),
+            )
+        )
 
     if unassigned_only:
         assigned_ids = db.query(Assignment.episode_id)

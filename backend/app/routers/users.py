@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
@@ -6,18 +7,36 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.models import User
 from app.schemas import CreateUserRequest, UpdateUserRequest, UserResponse
+from app.services.search import like_pattern
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[UserResponse])
 def list_users(
+    q: str | None = None,
+    user_role: str | None = Query(None, alias="role"),
     limit: int | None = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _: User = Depends(require_role("admin")),
 ):
-    query = db.query(User).order_by(User.created_at.desc(), User.id.desc())
+    query = db.query(User)
+
+    if user_role:
+        query = query.filter(User.role == user_role)
+
+    if q is not None and q.strip():
+        pattern = like_pattern(q.strip())
+        query = query.filter(
+            or_(
+                User.name.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+                User.organisation.ilike(pattern, escape="\\"),
+            )
+        )
+
+    query = query.order_by(User.created_at.desc(), User.id.desc())
     if offset:
         query = query.offset(offset)
     if limit is not None:

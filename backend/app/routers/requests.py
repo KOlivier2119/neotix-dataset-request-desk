@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,6 +18,7 @@ from app.schemas import (
 )
 from app.services import assignments as assignment_service
 from app.services import workflow
+from app.services.search import like_pattern
 
 router = APIRouter()
 
@@ -98,6 +99,7 @@ def create_request(
 @router.get("", response_model=list[RequestRead])
 def list_requests(
     request_status: str | None = None,
+    q: str | None = None,
     limit: int | None = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -109,6 +111,18 @@ def list_requests(
         query = query.filter(DatasetRequest.client_id == current_user.id)
     elif request_status is not None:
         query = query.filter(DatasetRequest.status == request_status)
+
+    if q is not None and q.strip():
+        pattern = like_pattern(q.strip())
+        query = query.join(User, DatasetRequest.client_id == User.id).filter(
+            or_(
+                DatasetRequest.title.ilike(pattern, escape="\\"),
+                DatasetRequest.task_name.ilike(pattern, escape="\\"),
+                DatasetRequest.notes.ilike(pattern, escape="\\"),
+                User.name.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+            )
+        )
 
     # Deterministic ordering so limit/offset pages never overlap or skip rows.
     query = query.order_by(DatasetRequest.created_at.desc(), DatasetRequest.id.desc())
