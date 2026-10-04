@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.middleware import LoggingMiddleware
+from app.routers.analytics import router as analytics_router
 from app.routers.auth import router as auth_router
 from app.routers.episodes import router as episodes_router
 from app.routers.requests import router as requests_router
@@ -12,6 +13,7 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(requests_router, prefix="/requests", tags=["requests"])
 app.include_router(episodes_router, prefix="/episodes", tags=["episodes"])
+app.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 
 
 @app.get("/health")

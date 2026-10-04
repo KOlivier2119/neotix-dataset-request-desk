@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = 60
     cookie_secure: bool = False
     environment: str = "development"
+    analytics_max_range_days: int = 366
 
     class Config:
         env_file = ".env"
