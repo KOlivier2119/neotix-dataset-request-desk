@@ -37,10 +37,14 @@ def create_request(
         )
     if body.deadline <= datetime.utcnow():
         raise HTTPException(status_code=422, detail="deadline must be in the future")
+    if not body.task_name.strip():
+        raise HTTPException(status_code=422, detail="task_name is required")
 
     req = DatasetRequest(
         client_id=current_user.id,
-        title=body.title,
+        title=body.title.strip() or body.task_name.strip(),
+        task_name=body.task_name.strip(),
+        notes=body.notes,
         episodes_requested=body.episodes_requested,
         deadline=body.deadline,
         status="submitted",
@@ -108,6 +112,8 @@ def get_request(
         id=req.id,
         client_id=req.client_id,
         title=req.title,
+        task_name=req.task_name,
+        notes=req.notes,
         episodes_requested=req.episodes_requested,
         deadline=req.deadline,
         status=req.status,

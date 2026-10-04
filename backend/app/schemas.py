@@ -77,15 +77,19 @@ class EpisodeRead(BaseModel):
 # ---------- Dataset Requests ----------
 
 class RequestCreate(BaseModel):
-    title: str
+    title: str = ""
+    task_name: str
     episodes_requested: int
     deadline: datetime
+    notes: str | None = None
 
 
 class RequestRead(BaseModel):
     id: int
     client_id: int
     title: str
+    task_name: str
+    notes: str | None
     episodes_requested: int
     deadline: datetime
     status: str

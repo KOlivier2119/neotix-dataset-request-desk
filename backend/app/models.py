@@ -64,6 +64,8 @@ class DatasetRequest(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    task_name: Mapped[str] = mapped_column(String, nullable=False, default="", server_default="")
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
     episodes_requested: Mapped[int] = mapped_column(nullable=False)
     deadline: Mapped[datetime] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="submitted")
