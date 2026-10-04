@@ -10,17 +10,27 @@ import Button from "@/components/Button";
 import ErrorBanner from "@/components/ErrorBanner";
 import StatusBadge from "@/components/StatusBadge";
 import Skeleton from "@/components/Skeleton";
+import Pagination from "@/components/Pagination";
 import Toast from "@/components/Toast";
 
 const STATUSES = ["", "submitted", "in_progress", "delivered", "accepted", "rejected"];
+const PAGE_SIZE = 25;
 
 function RequestsBody() {
   const { data: user } = useSWR<User>("/auth/me", fetcher);
   const params = useSearchParams();
   const isClient = user?.role === "client";
   const [statusFilter, setStatusFilter] = useState("");
-  const key = user ? (isClient || !statusFilter ? "/requests" : `/requests?status=${statusFilter}`) : null;
-  const { data: requests, error, mutate } = useSWR<RequestItem[]>(key, fetcher);
+  const [page, setPage] = useState(0);
+  const query = new URLSearchParams();
+  if (!isClient && statusFilter) query.set("status", statusFilter);
+  query.set("limit", String(PAGE_SIZE + 1));
+  query.set("offset", String(page * PAGE_SIZE));
+  const key = user ? `/requests?${query.toString()}` : null;
+  const { data: requests, error, mutate, isLoading } = useSWR<RequestItem[]>(key, fetcher);
+  // The API returns one extra row so we know whether another page exists.
+  const rows = (requests ?? []).slice(0, PAGE_SIZE);
+  const hasMore = (requests ?? []).length > PAGE_SIZE;
 
   const [createOpen, setCreateOpen] = useState(params.get("new") === "1");
   const [taskName, setTaskName] = useState("");
@@ -66,7 +76,10 @@ function RequestsBody() {
           <select
             className="rounded-md border border-black/[0.08] bg-white px-2 py-1 text-sm"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>{s ? s.replace("_", " ") : "all"}</option>
@@ -104,7 +117,7 @@ function RequestsBody() {
             </tr>
           </thead>
           <tbody>
-            {(requests ?? []).map((r) => (
+            {rows.map((r) => (
               <tr key={r.id} className="border-b border-black/[0.04] last:border-0">
                 <td className="py-2.5 pr-4">
                   <Link href={`/requests/${r.id}`} className="font-medium hover:underline">{r.title}</Link>
@@ -117,6 +130,17 @@ function RequestsBody() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {requests !== undefined && (rows.length > 0 || page > 0) && (
+        <Pagination
+          page={page}
+          count={rows.length}
+          pageSize={PAGE_SIZE}
+          hasMore={hasMore}
+          loading={isLoading}
+          onPageChange={setPage}
+        />
       )}
 
       {isClient && createOpen && (

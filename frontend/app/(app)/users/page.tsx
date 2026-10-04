@@ -7,11 +7,21 @@ import type { User } from "@/lib/types";
 import Button from "@/components/Button";
 import ErrorBanner from "@/components/ErrorBanner";
 import Skeleton from "@/components/Skeleton";
+import Pagination from "@/components/Pagination";
 import Toast from "@/components/Toast";
+
+const PAGE_SIZE = 25;
 
 export default function UsersPage() {
   const { data: me } = useSWR<User>("/auth/me", fetcher);
-  const { data: users, error, mutate } = useSWR<User[]>(me?.role === "admin" ? "/users" : null, fetcher);
+  const [page, setPage] = useState(0);
+  const { data: users, error, mutate, isLoading } = useSWR<User[]>(
+    me?.role === "admin" ? `/users?limit=${PAGE_SIZE + 1}&offset=${page * PAGE_SIZE}` : null,
+    fetcher,
+  );
+  // The API returns one extra row so we know whether another page exists.
+  const rows = (users ?? []).slice(0, PAGE_SIZE);
+  const hasMore = (users ?? []).length > PAGE_SIZE;
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -66,33 +76,43 @@ export default function UsersPage() {
       {!users && !error ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              {["Name", "Email", "Role", "Organisation", "Status", ""].map((h) => (
-                <th key={h} className="border-b border-black/[0.06] pb-2 pr-4 text-left text-xs font-medium uppercase tracking-wide text-[#6e6e73]">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(users ?? []).map((u) => (
-              <tr key={u.id} className="border-b border-black/[0.04] last:border-0">
-                <td className="py-2.5 pr-4 font-medium">{u.name}</td>
-                <td className="py-2.5 pr-4 text-[#6e6e73]">{u.email}</td>
-                <td className="py-2.5 pr-4 text-[#6e6e73]">{u.role}</td>
-                <td className="py-2.5 pr-4 text-[#6e6e73]">{u.organisation ?? "—"}</td>
-                <td className="py-2.5 pr-4">{u.is_active ? "Active" : "Deactivated"}</td>
-                <td className="py-2.5 pr-4 text-right">
-                  <button onClick={() => toggleActive(u)} className="text-[#007aff] hover:underline">
-                    {u.is_active ? "Deactivate" : "Activate"}
-                  </button>
-                </td>
+        <>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {["Name", "Email", "Role", "Organisation", "Status", ""].map((h) => (
+                  <th key={h} className="border-b border-black/[0.06] pb-2 pr-4 text-left text-xs font-medium uppercase tracking-wide text-[#6e6e73]">
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((u) => (
+                <tr key={u.id} className="border-b border-black/[0.04] last:border-0">
+                  <td className="py-2.5 pr-4 font-medium">{u.name}</td>
+                  <td className="py-2.5 pr-4 text-[#6e6e73]">{u.email}</td>
+                  <td className="py-2.5 pr-4 text-[#6e6e73]">{u.role}</td>
+                  <td className="py-2.5 pr-4 text-[#6e6e73]">{u.organisation ?? "—"}</td>
+                  <td className="py-2.5 pr-4">{u.is_active ? "Active" : "Deactivated"}</td>
+                  <td className="py-2.5 pr-4 text-right">
+                    <button onClick={() => toggleActive(u)} className="text-[#007aff] hover:underline">
+                      {u.is_active ? "Deactivate" : "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination
+            page={page}
+            count={rows.length}
+            pageSize={PAGE_SIZE}
+            hasMore={hasMore}
+            loading={isLoading}
+            onPageChange={setPage}
+          />
+        </>
       )}
 
       <section>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
@@ -12,10 +12,17 @@ router = APIRouter()
 
 @router.get("", response_model=list[UserResponse])
 def list_users(
+    limit: int | None = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _: User = Depends(require_role("admin")),
 ):
-    return db.query(User).all()
+    query = db.query(User).order_by(User.created_at.desc(), User.id.desc())
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

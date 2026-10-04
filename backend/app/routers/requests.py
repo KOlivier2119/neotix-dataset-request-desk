@@ -1,7 +1,7 @@
 """Requests router: CRUD and workflow for DatasetRequests."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -98,6 +98,8 @@ def create_request(
 @router.get("", response_model=list[RequestRead])
 def list_requests(
     request_status: str | None = None,
+    limit: int | None = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -107,6 +109,14 @@ def list_requests(
         query = query.filter(DatasetRequest.client_id == current_user.id)
     elif request_status is not None:
         query = query.filter(DatasetRequest.status == request_status)
+
+    # Deterministic ordering so limit/offset pages never overlap or skip rows.
+    query = query.order_by(DatasetRequest.created_at.desc(), DatasetRequest.id.desc())
+
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
 
     reqs = query.all()
     _enrich(db, reqs)

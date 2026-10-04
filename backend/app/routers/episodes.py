@@ -1,7 +1,7 @@
 """Episodes router: list episodes with filtering and pagination."""
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,8 +18,8 @@ def list_episodes(
     task_name: str | None = None,
     quality: str | None = None,
     unassigned_only: bool = False,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _: User = Depends(require_role("operator", "admin")),
 ):
@@ -35,6 +35,8 @@ def list_episodes(
         assigned_ids = db.query(Assignment.episode_id)
         query = query.filter(~Episode.id.in_(assigned_ids))
 
+    # Deterministic ordering so limit/offset pages never overlap or skip rows.
+    query = query.order_by(Episode.recorded_at.desc(), Episode.id.desc())
     query = query.offset(offset).limit(limit)
     return query.all()
 

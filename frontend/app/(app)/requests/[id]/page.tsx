@@ -10,12 +10,14 @@ import Button from "@/components/Button";
 import ErrorBanner from "@/components/ErrorBanner";
 import StatusBadge from "@/components/StatusBadge";
 import Skeleton from "@/components/Skeleton";
+import Pagination from "@/components/Pagination";
 import Toast from "@/components/Toast";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon } from "@hugeicons/core-free-icons";
 
 const FLOW = ["submitted", "in_progress", "delivered", "accepted"];
 const NEXT: Record<string, string> = { submitted: "in_progress", in_progress: "delivered", rejected: "in_progress" };
+const PAGE_SIZE = 25;
 
 function Workflow({ status }: { status: string }) {
   return (
@@ -65,13 +67,16 @@ export default function RequestDetailPage() {
 
   const effectiveTask = filterTask ?? req?.task_name ?? "";
   const isOperator = user?.role === "operator" || user?.role === "admin";
+  const [pickerPage, setPickerPage] = useState(0);
   const pickerKey = isOperator
-    ? `/episodes?${effectiveTask ? `task_name=${encodeURIComponent(effectiveTask)}&` : ""}${filterQuality ? `quality=${filterQuality}&` : ""}limit=100`
+    ? `/episodes?${effectiveTask ? `task_name=${encodeURIComponent(effectiveTask)}&` : ""}${filterQuality ? `quality=${filterQuality}&` : ""}limit=${PAGE_SIZE + 1}&offset=${pickerPage * PAGE_SIZE}`
     : null;
-  const { data: episodes, mutate: mutateEpisodes } = useSWR<Episode[]>(pickerKey, fetcher);
+  const { data: episodes, isLoading: episodesLoading, mutate: mutateEpisodes } = useSWR<Episode[]>(pickerKey, fetcher);
+  // The API returns one extra row so we know whether another page exists.
+  const hasMoreEpisodes = (episodes ?? []).length > PAGE_SIZE;
 
   const visibleEpisodes = useMemo(() => {
-    return (episodes ?? []).filter((e) => {
+    return (episodes ?? []).slice(0, PAGE_SIZE).filter((e) => {
       if (filterRobot && e.robot_id !== filterRobot) return false;
       if (search && !e.episode_id.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -234,9 +239,12 @@ export default function RequestDetailPage() {
               className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm outline-none"
               placeholder="task_name"
               value={effectiveTask}
-              onChange={(e) => setFilterTask(e.target.value)}
+              onChange={(e) => {
+                setFilterTask(e.target.value);
+                setPickerPage(0);
+              }}
             />
-            <select className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm" value={filterQuality} onChange={(e) => setFilterQuality(e.target.value)}>
+            <select className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm" value={filterQuality} onChange={(e) => { setFilterQuality(e.target.value); setPickerPage(0); }}>
               <option value="">any quality</option>
               <option value="good">good</option>
               <option value="usable">usable</option>
@@ -291,6 +299,15 @@ export default function RequestDetailPage() {
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            page={pickerPage}
+            count={visibleEpisodes.length}
+            pageSize={PAGE_SIZE}
+            hasMore={hasMoreEpisodes}
+            loading={episodesLoading}
+            onPageChange={setPickerPage}
+          />
         </section>
       )}
 
