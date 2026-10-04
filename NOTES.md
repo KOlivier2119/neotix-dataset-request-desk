@@ -39,7 +39,8 @@ statuses × roles); assignment rules in `app/services/assignments.py`. Routers s
 ## 2. Deliberately left out / simplified
 
 - **No frontend tests.** Domain correctness is enforced server-side and covered by pytest; UI flows
-  verified manually via curl through the Next proxy (browser pass pending a desktop-browser session).
+  verified manually via curl through the Next proxy and a headless-Chrome pass over `/login`,
+  `/episodes` and `/requests` (login photo, Power Grotesk, pagination controls).
 - **Analytics median uses latest delivered entry**; no handling of re-delivery edge cases beyond that.
 - **Episode uniqueness is the file's external `episode_id` string**, not (robot, task, timestamp).
   A recording-system ID collision is the right failure mode to skip on, and we log it as
@@ -51,11 +52,12 @@ statuses × roles); assignment rules in `app/services/assignments.py`. Routers s
   indirectly via `rejected` for clear violations; a follow-up could add a flagged-not-rejected list.
 - **Auth tokens in httpOnly cookies**; no refresh-token rotation, no password reset flow.
 - With two more days: export-job simulation stretch, WebSocket live updates, daily rollup table for
-  analytics, pagination cursors on `/episodes`.
+  analytics. Offset pagination (`limit`/`offset` + prev/next) now ships on `/episodes`, `/requests`
+  and `/users`; cursors would be the next step for very large episode tables.
 
 ## 3. Something that went wrong
 
-Two bugs found while wiring the frontend to the API:
+Three bugs found while wiring the frontend to the API:
 
 1. **CSV import reported `imported: -1`.** Cause: batched `INSERT ... ON CONFLICT DO NOTHING` via
    psycopg 3 returned `rowcount = -1`. Diagnosed by writing a minimal reproduction outside the app
@@ -68,6 +70,11 @@ Two bugs found while wiring the frontend to the API:
    FastAPI's trailing-slash redirects (308, method-changing for POST) leaked through the Next
    rewrite, so collection routes were re-registered without the trailing slash and the frontend
    stopped using trailing slashes.
+3. **The login photo never rendered.** `frontend/proxy.ts` matched every path except
+   `api|_next/static|_next/image|favicon.ico`, so a request for `/robot.jpeg` was redirected to
+   `/login` — including the internal fetch `/_next/image` performs, which then got HTML back and
+   answered `400 The requested resource isn't a valid image`. Fixed by also excluding anything with
+   a file extension (`.*\\..*`) from the matcher, as the Next docs warn for exactly this case.
 
 ## 4. Security
 
