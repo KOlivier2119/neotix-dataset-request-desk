@@ -112,22 +112,60 @@ def _parse_row(row: dict) -> tuple[dict | None, str | None]:
     return cleaned, None
 
 
+def _flush_batch(db: Session, batch: list[dict]) -> tuple[int, int]:
+    """Insert a batch idempotently. Returns (imported_count, skipped_existing_count)."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from app.models import Episode
+    stmt = pg_insert(Episode).values(batch).on_conflict_do_nothing(index_elements=["episode_id"])
+    result = db.execute(stmt)
+    db.commit()
+    imported = result.rowcount
+    skipped_existing = len(batch) - imported
+    return imported, skipped_existing
+
+
 def import_csv(db: Session, fileobj) -> dict:
     reader = csv.DictReader(fileobj)
     total_rows = 0
+    imported = 0
+    skipped_duplicate_in_file = 0
+    skipped_existing = 0
     rejected = []
-    for row_num, row in enumerate(reader, start=2):  # start=2 because row 1 is the header
-        # skip trailing blank lines (all fields empty or missing)
+    seen_ids: set[str] = set()
+    batch: list[dict] = []
+
+    def flush():
+        nonlocal imported, skipped_existing
+        if not batch:
+            return
+        i, s = _flush_batch(db, batch)
+        imported += i
+        skipped_existing += s
+        batch.clear()
+
+    for row_num, row in enumerate(reader, start=2):  # row 1 = header
         if not any((v or '').strip() for v in row.values()):
             continue
         total_rows += 1
         cleaned, reason = _parse_row(row)
         if reason:
             rejected.append({"row": row_num, "reason": reason})
+            continue
+        episode_id = cleaned["episode_id"]
+        if episode_id in seen_ids:
+            skipped_duplicate_in_file += 1
+            continue
+        seen_ids.add(episode_id)
+        batch.append(cleaned)
+        if len(batch) >= BATCH_SIZE:
+            flush()
+
+    flush()  # remaining rows
+
     return {
         "total_rows": total_rows,
-        "imported": 0,
-        "skipped_duplicate_in_file": 0,
-        "skipped_existing": 0,
+        "imported": imported,
+        "skipped_duplicate_in_file": skipped_duplicate_in_file,
+        "skipped_existing": skipped_existing,
         "rejected": rejected,
     }

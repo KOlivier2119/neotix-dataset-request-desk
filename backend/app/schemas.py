@@ -114,3 +114,13 @@ class TransitionRequest(BaseModel):
 
 class AssignmentRequest(BaseModel):
     episode_ids: list[int]
+
+
+# ---------- Import ----------
+
+class ImportReport(BaseModel):
+    total_rows: int
+    imported: int
+    skipped_duplicate_in_file: int
+    skipped_existing: int
+    rejected: list[dict]  # each: {"row": int, "reason": str}
