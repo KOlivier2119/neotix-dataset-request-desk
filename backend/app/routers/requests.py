@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
-from app.models import DatasetRequest, RequestStatusHistory, User
+from app.models import Assignment, DatasetRequest, RequestStatusHistory, User
 from app.schemas import (
     AssignmentRequest,
     RequestCreate,
@@ -108,6 +108,14 @@ def get_request(
         .all()
     )
 
+    assigned_ids = [
+        a.episode_id
+        for a in db.query(Assignment)
+        .filter(Assignment.request_id == request_id)
+        .order_by(Assignment.episode_id)
+        .all()
+    ]
+
     return RequestDetail(
         id=req.id,
         client_id=req.client_id,
@@ -119,6 +127,7 @@ def get_request(
         status=req.status,
         created_at=req.created_at,
         history=[StatusHistoryEntry.model_validate(h) for h in history],
+        assigned_episode_ids=assigned_ids,
     )
 
 

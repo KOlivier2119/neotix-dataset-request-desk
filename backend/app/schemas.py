@@ -110,6 +110,7 @@ class StatusHistoryEntry(BaseModel):
 
 class RequestDetail(RequestRead):
     history: list[StatusHistoryEntry]
+    assigned_episode_ids: list[int] = []
 
 
 class TransitionRequest(BaseModel):
