@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import {
   Analytics01Icon,
   DashboardSquare01Icon,
@@ -15,7 +15,7 @@ import {
 import { fetcher } from "@/lib/api";
 import type { User } from "@/lib/types";
 
-const NAV: { group: string; items: { href: string; label: string; icon: any; roles?: string[] }[] }[] = [
+const NAV: { group: string; items: { href: string; label: string; icon: IconSvgElement; roles?: string[] }[] }[] = [
   {
     group: "Workspace",
     items: [
