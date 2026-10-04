@@ -36,11 +36,36 @@ statuses × roles); assignment rules in `app/services/assignments.py`. Routers s
    is naive. Comparing them crashed with a 500 (offset-naive vs offset-aware). Normalise to naive
    UTC before validating/storing.
 
+**Lists, search and charts.**
+
+- **Everything that filters does it on the server.** `GET /episodes` accepts `q` (ILIKE over
+  episode id, robot, task, operator) and an exact `robot_id`; `GET /requests` accepts `q` (title,
+  task, notes, client name/email via join); `GET /users` accepts `q` (name/email/organisation) and
+  `role`. Client-side filtering was the first attempt and it is wrong the moment rows are paginated
+  — it only ever searched the current page. `%` and `_` are escaped in user input
+  (`app/services/search.py`) so searching for `pick_1` cannot match `pickx1`.
+- **Page size is 10** everywhere (`PAGE_SIZE`), with a `pageSize + 1` fetch to detect a next page
+  without a COUNT query. `/requests` and `/users` are deliberately uncapped when no `limit` is sent
+  so the dashboard KPI counts stay correct. Ordering is always `created_at/recorded_at DESC, id DESC`
+  so pages never overlap or skip a row.
+- **Filters live in the URL** (`?q=…&quality=…&page=2`) on `/episodes`, `/requests` and `/users` —
+  a refresh or a shared link keeps the same view, and the search input is debounced (300 ms) so a
+  keystroke does not fire a request per character.
+- **Charts are hand-rolled SVG** (`LineChart.tsx`, `BarChart.tsx`) rather than a charting library:
+  no new dependency, full control of the styling, and it needs `viewBox`-free responsive sizing via
+  `ResizeObserver` so labels stay crisp. Nice-number y ticks (1/2/2.5/5/10 × 10ⁿ), gradient area
+  fill for single series, a hover guide + tooltip card, a clickable legend that toggles per-robot
+  series, horizontal bars with share % for ranked counts, and explicit empty states. The axis is
+  scaled to the tallest *point* — scaling by series totals flattened every line against the
+  baseline (caught in a screenshot pass).
+
 ## 2. Deliberately left out / simplified
 
 - **No frontend tests.** Domain correctness is enforced server-side and covered by pytest; UI flows
   verified manually via curl through the Next proxy and a headless-Chrome pass over `/login`,
-  `/episodes` and `/requests` (login photo, Power Grotesk, pagination controls).
+  `/`, `/analytics`, `/episodes`, `/requests` and `/users` (login photo, Power Grotesk, pagination
+  controls, filtered/empty list states, charts). Screenshots drive the checklist: the URL-synced
+  filters make `/episodes?q=water` and `/episodes?q=zzzznope` directly renderable states.
 - **Analytics median uses latest delivered entry**; no handling of re-delivery edge cases beyond that.
 - **Episode uniqueness is the file's external `episode_id` string**, not (robot, task, timestamp).
   A recording-system ID collision is the right failure mode to skip on, and we log it as
@@ -99,7 +124,9 @@ What breaks first at 10× users and 100× episodes:
 
 - **`episodes` table scans** in `GET /episodes` and the analytics queries. Fixes: indexes
   (`recorded_at`, `(quality, recorded_at)`), monthly partitioning by `recorded_at`, and a daily
-  rollup table/materialized view for analytics.
+  rollup table/materialized view for analytics. The new `q` search is an unanchored
+  `ILIKE '%term%'`, which can never use a btree — at 100× rows it needs a `pg_trgm` GIN index
+  (and a *anchored* prefix match, `term%`, for the common "type the episode id" case).
 - **Single Postgres primary** becomes the write bottleneck for imports; batch imports already exist,
   next step is a background worker (e.g. pgmq/arq) for large files instead of a synchronous import
   request.
