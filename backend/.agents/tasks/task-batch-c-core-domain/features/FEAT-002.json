@@ -45,5 +45,5 @@
     "cd /home/fetch/Documents/neotix-dataset-request-desk/backend && python -m pytest tests/ -v"
   ],
   "blocked_reason": null,
-  "findings": "The DB UNIQUE constraint on assignments is (request_id, episode_id), not (episode_id) alone, so cross-request duplicate assignment requires an explicit pre-check in assign_episodes rather than relying solely on IntegrityError. Added explicit query before insert; savepoint/IntegrityError still present to guard races on the same (request_id, episode_id) pair."
+  "findings": "The DB UNIQUE constraint on assignments is (request_id, episode_id), not (episode_id) alone, so cross-request duplicate assignment requires an explicit pre-check in assign_episodes rather than relying solely on IntegrityError. Added explicit query before insert; savepoint/IntegrityError still present to guard races on the same (request_id, episode_id) pair. Integration verification (iteration 1): all 29 tests pass (test_health, test_logging, test_auth x9, test_domain x18). No seam failures between FEAT-001 and FEAT-002. No fixes required."
 }
