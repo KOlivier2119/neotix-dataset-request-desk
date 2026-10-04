@@ -1,0 +1,7 @@
+{
+  "task_id": "task-batch-c-core-domain",
+  "task_description": "Batch C Core Domain: add DatasetRequest/RequestStatusHistory/Assignment models and migration, workflow and assignment services, requests and episodes routers, and full test coverage for transitions, isolation, and assignment rules.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
