@@ -261,7 +261,7 @@ def test_client_list_shows_only_own_requests(client, db_session):
 
     client.post("/auth/login", json={"email": "list1@t.test", "password": "p"})
 
-    resp = client.get("/requests/")
+    resp = client.get("/requests")
     assert resp.status_code == 200
     data = resp.json()
     assert all(r["client_id"] == owner.id for r in data)

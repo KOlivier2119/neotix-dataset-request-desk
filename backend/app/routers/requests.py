@@ -1,5 +1,5 @@
 """Requests router: CRUD and workflow for DatasetRequests."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ router = APIRouter()
 # POST /requests  (client only)
 # ---------------------------------------------------------------------------
 
-@router.post("/", response_model=RequestRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RequestRead, status_code=status.HTTP_201_CREATED)
 def create_request(
     body: RequestCreate,
     db: Session = Depends(get_db),
@@ -35,10 +35,14 @@ def create_request(
         raise HTTPException(
             status_code=422, detail="episodes_requested must be greater than 0"
         )
-    if body.deadline <= datetime.utcnow():
-        raise HTTPException(status_code=422, detail="deadline must be in the future")
     if not body.task_name.strip():
         raise HTTPException(status_code=422, detail="task_name is required")
+
+    deadline = body.deadline
+    if deadline.tzinfo is not None:
+        deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+    if deadline <= datetime.utcnow():
+        raise HTTPException(status_code=422, detail="deadline must be in the future")
 
     req = DatasetRequest(
         client_id=current_user.id,
@@ -46,7 +50,7 @@ def create_request(
         task_name=body.task_name.strip(),
         notes=body.notes,
         episodes_requested=body.episodes_requested,
-        deadline=body.deadline,
+        deadline=deadline,
         status="submitted",
     )
     db.add(req)
@@ -68,7 +72,7 @@ def create_request(
 # GET /requests  (client: own; operator/admin: all, optional ?status=)
 # ---------------------------------------------------------------------------
 
-@router.get("/", response_model=list[RequestRead])
+@router.get("", response_model=list[RequestRead])
 def list_requests(
     request_status: str | None = None,
     db: Session = Depends(get_db),

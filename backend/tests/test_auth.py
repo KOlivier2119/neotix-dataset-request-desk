@@ -74,7 +74,7 @@ def test_client_cannot_access_users_list(client, db_session):
     """Client role hitting GET /users (admin-only) returns 403."""
     make_user(db_session, "client@test.com", "pass", "client")
     login(client, "client@test.com", "pass")
-    resp = client.get("/users/")
+    resp = client.get("/users")
     assert resp.status_code == 403
 
 
@@ -82,7 +82,7 @@ def test_operator_cannot_create_user(client, db_session):
     """Operator role hitting POST /users (admin-only) returns 403."""
     make_user(db_session, "op@test.com", "pass", "operator")
     login(client, "op@test.com", "pass")
-    resp = client.post("/users/", json={
+    resp = client.post("/users", json={
         "email": "new@test.com", "name": "New", "password": "x", "role": "client"
     })
     assert resp.status_code == 403

@@ -13,7 +13,7 @@ from app.services.importer import import_csv
 router = APIRouter()
 
 
-@router.get("/", response_model=list[EpisodeRead])
+@router.get("", response_model=list[EpisodeRead])
 def list_episodes(
     task_name: str | None = None,
     quality: str | None = None,

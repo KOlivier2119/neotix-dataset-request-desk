@@ -30,7 +30,7 @@ export default function RequestDetailPage() {
   const effectiveTask = filterTask ?? req?.task_name ?? "";
   const pickerKey =
     user && user.role !== "client"
-      ? `/episodes/?${effectiveTask ? `task_name=${encodeURIComponent(effectiveTask)}&` : ""}${filterQuality ? `quality=${filterQuality}&` : ""}limit=50`
+      ? `/episodes?${effectiveTask ? `task_name=${encodeURIComponent(effectiveTask)}&` : ""}${filterQuality ? `quality=${filterQuality}&` : ""}limit=50`
       : null;
   const { data: episodes, mutate: mutateEpisodes } = useSWR<Episode[]>(pickerKey, fetcher);
 

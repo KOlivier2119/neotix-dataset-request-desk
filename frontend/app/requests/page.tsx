@@ -15,7 +15,7 @@ export default function RequestsPage() {
   const { data: user } = useSWR<User>("/auth/me", fetcher);
   const [statusFilter, setStatusFilter] = useState("");
   const isClient = user?.role === "client";
-  const key = user ? (isClient || !statusFilter ? "/requests/" : `/requests/?status=${statusFilter}`) : null;
+  const key = user ? (isClient || !statusFilter ? "/requests" : `/requests?status=${statusFilter}`) : null;
   const { data: requests, error, mutate } = useSWR<RequestItem[]>(key, fetcher);
 
   const [taskName, setTaskName] = useState("");
@@ -28,7 +28,7 @@ export default function RequestsPage() {
     e.preventDefault();
     setFormError(null);
     try {
-      await api("/requests/", {
+      await api("/requests", {
         method: "POST",
         body: JSON.stringify({
           task_name: taskName,

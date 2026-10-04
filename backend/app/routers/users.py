@@ -10,7 +10,7 @@ from app.schemas import CreateUserRequest, UpdateUserRequest, UserResponse
 router = APIRouter()
 
 
-@router.get("/", response_model=list[UserResponse])
+@router.get("", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_role("admin")),
@@ -18,7 +18,7 @@ def list_users(
     return db.query(User).all()
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     body: CreateUserRequest,
     db: Session = Depends(get_db),
