@@ -35,7 +35,7 @@ def login(
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(response: Response, _: User = Depends(get_current_user)):
     response.delete_cookie("access_token")
     return {"message": "logged out"}
 
