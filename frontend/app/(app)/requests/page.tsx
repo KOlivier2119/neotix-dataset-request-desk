@@ -1,28 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
 import { api, ApiError, fetcher } from "@/lib/api";
 import type { RequestItem, User } from "@/lib/types";
+import { REQUEST_STATUSES } from "@/lib/constants";
+import { useDebounced } from "@/lib/useDebounced";
 import Button from "@/components/Button";
 import ErrorBanner from "@/components/ErrorBanner";
 import StatusBadge from "@/components/StatusBadge";
 import Skeleton from "@/components/Skeleton";
 import Pagination from "@/components/Pagination";
 import Toast from "@/components/Toast";
+import { FilterBar, FilterSelect, SearchInput } from "@/components/Filters";
 
-const STATUSES = ["", "submitted", "in_progress", "delivered", "accepted", "rejected"];
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 function RequestsBody() {
   const { data: user } = useSWR<User>("/auth/me", fetcher);
   const params = useSearchParams();
+  const router = useRouter();
   const isClient = user?.role === "client";
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState(0);
+
+  // Filters live in the URL so a refresh or a shared link keeps the same view.
+  const [search, setSearch] = useState(params.get("q") ?? "");
+  const [statusFilter, setStatusFilter] = useState(params.get("status") ?? "");
+  const [page, setPage] = useState(Math.max(0, Number(params.get("page") ?? "1") - 1));
+
+  // Searching happens server-side (title, task, notes and client), so the key
+  // only changes once the user pauses typing.
+  const term = useDebounced(search);
+  const activeFilters = [term, isClient ? "" : statusFilter].filter(Boolean).length;
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (term) next.set("q", term);
+    if (!isClient && statusFilter) next.set("status", statusFilter);
+    if (page > 0) next.set("page", String(page + 1));
+    if (next.toString() !== params.toString()) {
+      router.replace(next.toString() ? `?${next.toString()}` : "/requests", { scroll: false });
+    }
+  }, [term, statusFilter, page, isClient, params, router]);
+
   const query = new URLSearchParams();
+  if (term) query.set("q", term);
   if (!isClient && statusFilter) query.set("status", statusFilter);
   query.set("limit", String(PAGE_SIZE + 1));
   query.set("offset", String(page * PAGE_SIZE));
@@ -31,6 +54,12 @@ function RequestsBody() {
   // The API returns one extra row so we know whether another page exists.
   const rows = (requests ?? []).slice(0, PAGE_SIZE);
   const hasMore = (requests ?? []).length > PAGE_SIZE;
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("");
+    setPage(0);
+  }
 
   const [createOpen, setCreateOpen] = useState(params.get("new") === "1");
   const [taskName, setTaskName] = useState("");
@@ -64,29 +93,37 @@ function RequestsBody() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
       <header className="flex items-end justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Requests</h1>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Requests</h1>
+          <p className="mt-1 text-sm text-[#6e6e73]">Search by title, task, notes or client — 10 per page.</p>
+        </div>
         {isClient && (
           <Button onClick={() => setCreateOpen((o) => !o)}>{createOpen ? "Cancel" : "New request"}</Button>
         )}
       </header>
 
-      {!isClient && user && (
-        <div className="flex items-center gap-2 text-sm text-[#6e6e73]">
-          <span>Status</span>
-          <select
-            className="rounded-md border border-black/[0.08] bg-white px-2 py-1 text-sm"
+      <FilterBar activeCount={activeFilters} onClear={clearFilters}>
+        <SearchInput
+          value={search}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(0);
+          }}
+          placeholder="Search requests…"
+          label="Search requests"
+        />
+        {!isClient && user && (
+          <FilterSelect
+            label="Status"
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
+            onChange={(v) => {
+              setStatusFilter(v);
               setPage(0);
             }}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{s ? s.replace("_", " ") : "all"}</option>
-            ))}
-          </select>
-        </div>
-      )}
+            options={REQUEST_STATUSES}
+          />
+        )}
+      </FilterBar>
 
       <ErrorBanner
         message={error ? "Unable to load requests. Check your connection and try again." : null}
@@ -95,16 +132,23 @@ function RequestsBody() {
 
       {!requests && !error ? (
         <Skeleton className="h-40 w-full" />
-      ) : requests && requests.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="border-t border-black/[0.06] pt-6 text-sm text-[#6e6e73]">
-          {isClient ? (
+          {activeFilters > 0 ? (
+            <>
+              No requests match your filters.{" "}
+              <button type="button" onClick={clearFilters} className="text-[#007aff] hover:underline">
+                Clear filters
+              </button>
+            </>
+          ) : isClient ? (
             <>
               No requests yet.
               <br />
               Create your first dataset request to get started.
             </>
           ) : (
-            "No requests match this filter."
+            "No requests yet."
           )}
         </div>
       ) : (

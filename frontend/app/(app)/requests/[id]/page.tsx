@@ -2,22 +2,23 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { api, ApiError, fetcher } from "@/lib/api";
 import type { Episode, RequestDetail, User } from "@/lib/types";
+import { QUALITY_OPTIONS, ROBOT_OPTIONS } from "@/lib/constants";
+import { useDebounced } from "@/lib/useDebounced";
 import Button from "@/components/Button";
 import ErrorBanner from "@/components/ErrorBanner";
 import StatusBadge from "@/components/StatusBadge";
 import Skeleton from "@/components/Skeleton";
 import Pagination from "@/components/Pagination";
 import Toast from "@/components/Toast";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Search01Icon } from "@hugeicons/core-free-icons";
+import { FilterBar, FilterSelect, SearchInput, TextInput } from "@/components/Filters";
 
 const FLOW = ["submitted", "in_progress", "delivered", "accepted"];
 const NEXT: Record<string, string> = { submitted: "in_progress", in_progress: "delivered", rejected: "in_progress" };
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 function Workflow({ status }: { status: string }) {
   return (
@@ -68,20 +69,33 @@ export default function RequestDetailPage() {
   const effectiveTask = filterTask ?? req?.task_name ?? "";
   const isOperator = user?.role === "operator" || user?.role === "admin";
   const [pickerPage, setPickerPage] = useState(0);
-  const pickerKey = isOperator
-    ? `/episodes?${effectiveTask ? `task_name=${encodeURIComponent(effectiveTask)}&` : ""}${filterQuality ? `quality=${filterQuality}&` : ""}limit=${PAGE_SIZE + 1}&offset=${pickerPage * PAGE_SIZE}`
-    : null;
+
+  // Search + filters run server-side, so they apply across every page rather
+  // than only the rows currently on screen.
+  const term = useDebounced(search);
+  const activePickerFilters = [term, effectiveTask, filterQuality, filterRobot].filter(Boolean).length;
+
+  const pickerQuery = new URLSearchParams();
+  if (term) pickerQuery.set("q", term);
+  if (effectiveTask) pickerQuery.set("task_name", effectiveTask);
+  if (filterQuality) pickerQuery.set("quality", filterQuality);
+  if (filterRobot) pickerQuery.set("robot_id", filterRobot);
+  pickerQuery.set("limit", String(PAGE_SIZE + 1));
+  pickerQuery.set("offset", String(pickerPage * PAGE_SIZE));
+
+  const pickerKey = isOperator ? `/episodes?${pickerQuery.toString()}` : null;
   const { data: episodes, isLoading: episodesLoading, mutate: mutateEpisodes } = useSWR<Episode[]>(pickerKey, fetcher);
   // The API returns one extra row so we know whether another page exists.
   const hasMoreEpisodes = (episodes ?? []).length > PAGE_SIZE;
+  const visibleEpisodes = (episodes ?? []).slice(0, PAGE_SIZE);
 
-  const visibleEpisodes = useMemo(() => {
-    return (episodes ?? []).slice(0, PAGE_SIZE).filter((e) => {
-      if (filterRobot && e.robot_id !== filterRobot) return false;
-      if (search && !e.episode_id.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }, [episodes, filterRobot, search]);
+  function clearPickerFilters() {
+    setSearch("");
+    setFilterTask("");
+    setFilterQuality("");
+    setFilterRobot("");
+    setPickerPage(0);
+  }
 
   async function transition(to: string) {
     setActionError(null);
@@ -230,33 +244,44 @@ export default function RequestDetailPage() {
             <p className="text-sm text-[#6e6e73]">{remaining} required · {req.assigned_count} assigned</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 py-1.5">
-              <HugeiconsIcon icon={Search01Icon} size={15} />
-              <input className="bg-transparent text-sm outline-none" placeholder="Search episode ID" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </label>
-            <input
-              className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm outline-none"
-              placeholder="task_name"
-              value={effectiveTask}
-              onChange={(e) => {
-                setFilterTask(e.target.value);
+          <FilterBar activeCount={activePickerFilters} onClear={clearPickerFilters}>
+            <SearchInput
+              value={search}
+              onChange={(v) => {
+                setSearch(v);
                 setPickerPage(0);
               }}
+              placeholder="Search episodes…"
+              label="Search episodes"
             />
-            <select className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm" value={filterQuality} onChange={(e) => { setFilterQuality(e.target.value); setPickerPage(0); }}>
-              <option value="">any quality</option>
-              <option value="good">good</option>
-              <option value="usable">usable</option>
-              <option value="bad">bad</option>
-            </select>
-            <select className="rounded-md border border-black/[0.08] bg-white px-3 py-1.5 text-sm" value={filterRobot} onChange={(e) => setFilterRobot(e.target.value)}>
-              <option value="">any robot</option>
-              {["arm-01", "arm-02", "arm-03", "mobile-01", "humanoid-01"].map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+            <TextInput
+              value={effectiveTask}
+              onChange={(v) => {
+                setFilterTask(v);
+                setPickerPage(0);
+              }}
+              placeholder="task_name"
+              label="Filter by task name"
+            />
+            <FilterSelect
+              label="Quality"
+              value={filterQuality}
+              onChange={(v) => {
+                setFilterQuality(v);
+                setPickerPage(0);
+              }}
+              options={QUALITY_OPTIONS}
+            />
+            <FilterSelect
+              label="Robot"
+              value={filterRobot}
+              onChange={(v) => {
+                setFilterRobot(v);
+                setPickerPage(0);
+              }}
+              options={ROBOT_OPTIONS}
+            />
+          </FilterBar>
 
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -268,46 +293,67 @@ export default function RequestDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleEpisodes.map((e) => {
-                  const disabled = e.quality === "bad" || req.assigned_episode_ids.includes(e.id);
-                  return (
-                    <tr key={e.id} className={`border-b border-black/[0.04] last:border-0 ${disabled ? "opacity-40" : ""}`}>
-                      <td className="py-2 pr-4">
-                        <input
-                          type="checkbox"
-                          disabled={disabled}
-                          checked={selected.has(e.id)}
-                          onChange={() =>
-                            setSelected((prev) => {
-                              const next = new Set(prev);
-                              next.has(e.id) ? next.delete(e.id) : next.add(e.id);
-                              return next;
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="py-2 pr-4 font-medium">{e.episode_id}</td>
-                      <td className="py-2 pr-4 text-[#6e6e73]">{e.robot_id}</td>
-                      <td className="py-2 pr-4 text-[#6e6e73]">{e.task_name}</td>
-                      <td className="py-2 pr-4 text-[#6e6e73]">{new Date(e.recorded_at).toLocaleDateString()}</td>
-                      <td className="py-2 pr-4 text-[#6e6e73]">{e.duration_seconds}s</td>
-                      <td className="py-2 pr-4 text-[#6e6e73]">{e.operator_name}</td>
-                      <td className="py-2 pr-4"><StatusBadge status={e.quality === "bad" ? "rejected" : e.quality === "usable" ? "delivered" : "accepted"} /></td>
-                    </tr>
-                  );
-                })}
+                {visibleEpisodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-sm text-[#6e6e73]">
+                      {episodesLoading ? (
+                        "Loading episodes…"
+                      ) : activePickerFilters > 0 ? (
+                        <>
+                          No episodes match your filters.{" "}
+                          <button type="button" onClick={clearPickerFilters} className="text-[#007aff] hover:underline">
+                            Clear filters
+                          </button>
+                        </>
+                      ) : (
+                        "No episodes available."
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleEpisodes.map((e) => {
+                    const disabled = e.quality === "bad" || req.assigned_episode_ids.includes(e.id);
+                    return (
+                      <tr key={e.id} className={`border-b border-black/[0.04] last:border-0 ${disabled ? "opacity-40" : ""}`}>
+                        <td className="py-2 pr-4">
+                          <input
+                            type="checkbox"
+                            disabled={disabled}
+                            checked={selected.has(e.id)}
+                            onChange={() =>
+                              setSelected((prev) => {
+                                const next = new Set(prev);
+                                next.has(e.id) ? next.delete(e.id) : next.add(e.id);
+                                return next;
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="py-2 pr-4 font-medium">{e.episode_id}</td>
+                        <td className="py-2 pr-4 text-[#6e6e73]">{e.robot_id}</td>
+                        <td className="py-2 pr-4 text-[#6e6e73]">{e.task_name}</td>
+                        <td className="py-2 pr-4 text-[#6e6e73]">{new Date(e.recorded_at).toLocaleDateString()}</td>
+                        <td className="py-2 pr-4 text-[#6e6e73]">{e.duration_seconds}s</td>
+                        <td className="py-2 pr-4 text-[#6e6e73]">{e.operator_name}</td>
+                        <td className="py-2 pr-4"><StatusBadge status={e.quality === "bad" ? "rejected" : e.quality === "usable" ? "delivered" : "accepted"} /></td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
 
-          <Pagination
-            page={pickerPage}
-            count={visibleEpisodes.length}
-            pageSize={PAGE_SIZE}
-            hasMore={hasMoreEpisodes}
-            loading={episodesLoading}
-            onPageChange={setPickerPage}
-          />
+          {(visibleEpisodes.length > 0 || pickerPage > 0) && (
+            <Pagination
+              page={pickerPage}
+              count={visibleEpisodes.length}
+              pageSize={PAGE_SIZE}
+              hasMore={hasMoreEpisodes}
+              loading={episodesLoading}
+              onPageChange={setPickerPage}
+            />
+          )}
         </section>
       )}
 
