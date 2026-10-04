@@ -113,11 +113,21 @@ def _parse_row(row: dict) -> tuple[dict | None, str | None]:
 
 
 def import_csv(db: Session, fileobj) -> dict:
-    """Import episodes from a CSV file object. Stub implementation."""
+    reader = csv.DictReader(fileobj)
+    total_rows = 0
+    rejected = []
+    for row_num, row in enumerate(reader, start=2):  # start=2 because row 1 is the header
+        # skip trailing blank lines (all fields empty or missing)
+        if not any((v or '').strip() for v in row.values()):
+            continue
+        total_rows += 1
+        cleaned, reason = _parse_row(row)
+        if reason:
+            rejected.append({"row": row_num, "reason": reason})
     return {
-        "total_rows": 0,
+        "total_rows": total_rows,
         "imported": 0,
         "skipped_duplicate_in_file": 0,
         "skipped_existing": 0,
-        "rejected": [],
+        "rejected": rejected,
     }
