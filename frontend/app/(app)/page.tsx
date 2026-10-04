@@ -61,6 +61,7 @@ export default function DashboardPage() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([day, count]) => ({
       label: new Date(day + "T00:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric" }),
+      short: new Date(day + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }),
       value: count,
     }));
   const totalEpisodes = [...episodesByDay.values()].reduce((a, b) => a + b, 0);
