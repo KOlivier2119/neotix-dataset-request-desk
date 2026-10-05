@@ -114,6 +114,57 @@ Range is half-open (`recorded_at >= from AND < to + 1 day`); `from <= to` and th
 | `POST /episodes/import` | operator, admin |
 | `GET /analytics` | operator, admin |
 
+## Deploy to Vercel
+
+`vercel.json` at the repo root configures **one project with two services**:
+
+| Service | Root | Framework | Exposed on |
+|---|---|---|---|
+| `backend` | `backend/` | FastAPI (Python) | `/api/(.*)` |
+| `frontend` | `frontend/` | Next.js | `/(.*)` (catch-all, last) |
+
+Top-level rewrites run in order, so:
+
+| Request | Handled by | Path the service sees |
+|---|---|---|
+| `GET /api/episodes` | `backend` | `/episodes` |
+| `POST /api/auth/login` | `backend` | `/auth/login` |
+| `GET /analytics` | `frontend` | `/analytics` |
+
+The backend service carries a `request.path` transform that strips the `/api`
+prefix. That is what lets the FastAPI routes, the 52 tests and the docker setup
+keep their current `/episodes` / `/auth/login` shape — without it the backend
+would receive `/api/episodes` and 404.
+
+**There is deliberately no service binding.** The browser calls the API directly
+over the public `/api/*` route on the same origin, so no service ever calls
+another service; `frontend/next.config.ts`'s `API_URL` rewrite exists only for
+`next dev` and docker compose.
+
+### Setup
+
+1. Import the repo in Vercel. Leave Root Directory empty — `vercel.json` sits at the repo root.
+2. Set environment variables (Project → Settings → Environment Variables) for
+   **Production and Preview**: `DATABASE_URL`, `SECRET_KEY`, `COOKIE_SECURE=true`.
+   See `.env.example` for details and the `postgres://` → `postgresql+psycopg://` conversion.
+3. Deploy. The backend build command is `alembic upgrade head && python -m app.seed`,
+   so migrations run on every deploy that has `DATABASE_URL`.
+
+Smoke test: `https://<domain>/api/health` → `{"status":"ok"}`.
+
+Local development is unchanged — `docker compose up --build` (API `:8000`,
+web `:3000`), or `next dev` against `API_URL`. `vercel dev` runs both services
+together locally and injects the same routing.
+
+### Known limits on Vercel
+
+- FastAPI's `/docs` and `/openapi.json` are not under `/api`, so they are not
+  routed to the backend (they would land on the frontend). Use `/api/health`.
+- Vercel caps request bodies at 4.5 MB, below the API's own 10 MB CSV upload cap,
+  so very large episode imports fail at the edge before reaching FastAPI.
+- The build seeds `seed/users.json` demo accounts wherever `DATABASE_URL` is set —
+  including preview deployments pointed at the production database.
+
 ## Configuration
 
 See `.env.example`. Defaults work out of the box for local dev; set a real `SECRET_KEY` in production.

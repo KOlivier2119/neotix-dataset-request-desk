@@ -59,6 +59,25 @@ statuses × roles); assignment rules in `app/services/assignments.py`. Routers s
   scaled to the tallest *point* — scaling by series totals flattened every line against the
   baseline (caught in a screenshot pass).
 
+**Deployment (Vercel services).** One project, two services (`backend`, `frontend`) split by the
+top-level rewrites in `vercel.json`:
+
+- *The path mismatch is the interesting part.* Services receive the **original** request path, so
+  `/api/episodes` would reach FastAPI as `/api/episodes` while the app declares `/episodes`. Fixed
+  with a `request.path` transform in the backend service's own `routes`
+  (`src: "/api/(.*)"`, `args: "/$1"`), which rewrites only the path the runtime observes while the
+  top-level rewrite still picks the service. Zero backend code changes — tests, CI and docker are
+  untouched.
+- *No binding, on purpose.* A binding exists for service-to-service calls, and after routing
+  there are none left: the browser hits `/api/*` on the same origin. The one internal URL in the
+  codebase (`API_URL` = `http://api:8000`) is a local-dev/docker concern, so it stayed rather than
+  becoming a binding nothing would read. Bindings also don't resolve at build time or in middleware,
+  so the frontend's `proxy.ts` could not have used one anyway.
+- *Migrations live in `buildCommand`* (`alembic upgrade head && python -m app.seed`) because Vercel
+  runs no migration step, and project env vars — unlike bindings — do exist at build time. The cost
+  is that every deploy holding `DATABASE_URL` migrates *and seeds* whatever it points at, previews
+  included.
+
 ## 2. Deliberately left out / simplified
 
 - **No frontend tests.** Domain correctness is enforced server-side and covered by pytest; UI flows
