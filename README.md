@@ -32,7 +32,8 @@ This starts Postgres, runs Alembic migrations, seeds users, starts the API, and 
 | client-a@example.com | client123 | client |
 | client-b@example.com | client123 | client |
 
-Seed episodes are imported separately (see below).
+Seed episodes are imported separately — except on Vercel, where the build step
+runs the importer for you (see [Deploy to Vercel](#deploy-to-vercel)).
 
 ## Import the CSV
 
@@ -131,10 +132,14 @@ Top-level rewrites run in order, so:
 | `POST /api/auth/login` | `backend` | `/auth/login` |
 | `GET /analytics` | `frontend` | `/analytics` |
 
-The backend service carries a `request.path` transform that strips the `/api`
-prefix. That is what lets the FastAPI routes, the 52 tests and the docker setup
-keep their current `/episodes` / `/auth/login` shape — without it the backend
-would receive `/api/episodes` and 404.
+The backend service declares Vercel's documented `request.path` transform to
+strip the `/api` prefix, **and** `StripApiPrefix` (`backend/app/middleware.py`)
+strips it again inside FastAPI. The transform did not apply on the live
+deployment — `/api/health` came back 404 instead of `{"status":"ok"}` — so
+routing now relies on the middleware, which is covered by
+`tests/test_api_prefix.py` and is a no-op once the prefix is already gone. That
+is what lets the FastAPI routes, the tests and the docker setup keep their
+current `/episodes` / `/auth/login` shape.
 
 **There is deliberately no service binding.** The browser calls the API directly
 over the public `/api/*` route on the same origin, so no service ever calls
@@ -149,10 +154,12 @@ another service; `frontend/next.config.ts`'s `API_URL` rewrite exists only for
    `COOKIE_SECURE=true`. A production build fails on purpose until `DATABASE_URL`
    exists, because the API would otherwise fall back to the localhost default.
    See `.env.example` for details and the `postgres://` → `postgresql+psycopg://` conversion.
-3. Deploy. The backend build command is `sh scripts/vercel_build.sh`, which runs
-   `alembic upgrade head && python -m app.seed` whenever `DATABASE_URL` is set,
-   fails production builds that have no `DATABASE_URL`, and skips with a warning
-   on previews that don't — so the frontend can still be previewed without a database.
+3. Deploy. The backend build command is `sh scripts/vercel_build.sh`:
+   `alembic upgrade head`, then `python -m app.seed` (users) and
+   `python -m app.import_episodes ../seed/episodes.csv` (episodes) — all
+   idempotent, so a redeploy never duplicates rows. It fails production builds
+   that have no `DATABASE_URL` and skips with a warning on previews, so the
+   frontend can still be previewed without a database.
 
 Smoke test: `https://<domain>/api/health` → `{"status":"ok"}`.
 
@@ -162,6 +169,10 @@ together locally and injects the same routing.
 
 ### Known limits on Vercel
 
+- The image optimizer `/_next/image` is not served — every optimizer URL returns
+  the app's own not-found page while the raw file is `200 image/jpeg`. So
+  `next.config.ts` sets `images.unoptimized: true` and the login photo loads
+  straight from `public/robot.jpeg`. Verified on the live deployment.
 - FastAPI's `/docs` and `/openapi.json` are not under `/api`, so they are not
   routed to the backend (they would land on the frontend). Use `/api/health`.
 - Vercel caps request bodies at 4.5 MB, below the API's own 10 MB CSV upload cap,

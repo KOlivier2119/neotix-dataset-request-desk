@@ -33,4 +33,8 @@ fi
 
 echo "Applying migrations for the '${VERCEL_ENV:-local}' environment..."
 alembic upgrade head
+# Users (seed/users.json) and episodes (seed/episodes.csv) — both idempotent:
+# the seeder skips rows that exist and the importer uses ON CONFLICT DO NOTHING
+# on episode_id, so a redeploy never duplicates data.
 python -m app.seed
+python -m app.import_episodes ../seed/episodes.csv

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.middleware import LoggingMiddleware
+from app.middleware import LoggingMiddleware, StripApiPrefix
 from app.routers.analytics import router as analytics_router
 from app.routers.auth import router as auth_router
 from app.routers.episodes import router as episodes_router
@@ -9,6 +9,9 @@ from app.routers.users import router as users_router
 
 app = FastAPI(title="Dataset Request Desk")
 app.add_middleware(LoggingMiddleware)
+# Added last so it wraps the logger: log lines show the routed path (the
+# prefix-stripped one), matching what docker compose and `next dev` log.
+app.add_middleware(StripApiPrefix)
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(requests_router, prefix="/requests", tags=["requests"])

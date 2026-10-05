@@ -63,18 +63,29 @@ statuses × roles); assignment rules in `app/services/assignments.py`. Routers s
 top-level rewrites in `vercel.json`:
 
 - *The path mismatch is the interesting part.* Services receive the **original** request path, so
-  `/api/episodes` would reach FastAPI as `/api/episodes` while the app declares `/episodes`. Fixed
-  with a `request.path` transform in the backend service's own `routes`
-  (`src: "/api/(.*)"`, `args: "/$1"`), which rewrites only the path the runtime observes while the
-  top-level rewrite still picks the service. Zero backend code changes — tests, CI and docker are
-  untouched.
+  `/api/episodes` would reach FastAPI as `/api/episodes` while the app declares `/episodes`.
+  `vercel.json` declares Vercel's documented `request.path` transform for exactly this
+  (`src: "/api/(.*)"` → `args: "/$1"`, copied from the docs example) — **and it did not take
+  effect**: on the live deployment `/api/health` returned FastAPI's 404 instead of
+  `{"status":"ok"}`, so the backend still saw the prefixed path. The strip now happens in
+  `StripApiPrefix` (`app/middleware.py`), a raw ASGI middleware that rewrites `scope["path"]`, with
+  `tests/test_api_prefix.py` pinning bare/prefixed/double-prefix/bare-`/api`. The transform stays
+  because the two are idempotent and it is the platform-native mechanism — routing just no longer
+  depends on it. Docker and `next dev` never saw the prefix: their Next rewrite strips it before
+  the request leaves the frontend.
+- *`/_next/image` is not served here.* The login photo's `<Image>` shipped with optimizer srcSet
+  URLs; on Vercel every one of them returned the app's own not-found page while `/robot.jpeg`
+  itself was `200 image/jpeg`, so the photo rendered as a broken image. `images.unoptimized` in
+  `next.config.ts` points the `<img>` straight at the file — verified in the prerendered HTML
+  (`src="/robot.jpeg"`, no srcSet). Only that one component uses `next/image`.
 - *No binding, on purpose.* A binding exists for service-to-service calls, and after routing
   there are none left: the browser hits `/api/*` on the same origin. The one internal URL in the
   codebase (`API_URL` = `http://api:8000`) is a local-dev/docker concern, so it stayed rather than
   becoming a binding nothing would read. Bindings also don't resolve at build time or in middleware,
   so the frontend's `proxy.ts` could not have used one anyway.
-- *Migrations live in `buildCommand`* (`sh scripts/vercel_build.sh` → `alembic upgrade head &&
-  python -m app.seed`) because Vercel runs no migration step, and project env vars — unlike
+- *Migrations live in `buildCommand`* (`sh scripts/vercel_build.sh` → `alembic upgrade head`,
+  `python -m app.seed`, `python -m app.import_episodes ../seed/episodes.csv`) because Vercel runs no
+  migration step, and project env vars — unlike
   bindings — do exist at build time. The first deploy failed on the missing `DATABASE_URL`, so the
   script is now fail-closed: production (or an unknown `VERCEL_ENV`) without `DATABASE_URL` fails
   the build with instructions, while previews skip with a warning so the frontend can still ship.
