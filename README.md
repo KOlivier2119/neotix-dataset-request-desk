@@ -144,11 +144,15 @@ another service; `frontend/next.config.ts`'s `API_URL` rewrite exists only for
 ### Setup
 
 1. Import the repo in Vercel. Leave Root Directory empty — `vercel.json` sits at the repo root.
-2. Set environment variables (Project → Settings → Environment Variables) for
-   **Production and Preview**: `DATABASE_URL`, `SECRET_KEY`, `COOKIE_SECURE=true`.
+2. **Before the first deploy**, set environment variables (Project → Settings →
+   Environment Variables, Production): `DATABASE_URL`, `SECRET_KEY`,
+   `COOKIE_SECURE=true`. A production build fails on purpose until `DATABASE_URL`
+   exists, because the API would otherwise fall back to the localhost default.
    See `.env.example` for details and the `postgres://` → `postgresql+psycopg://` conversion.
-3. Deploy. The backend build command is `alembic upgrade head && python -m app.seed`,
-   so migrations run on every deploy that has `DATABASE_URL`.
+3. Deploy. The backend build command is `sh scripts/vercel_build.sh`, which runs
+   `alembic upgrade head && python -m app.seed` whenever `DATABASE_URL` is set,
+   fails production builds that have no `DATABASE_URL`, and skips with a warning
+   on previews that don't — so the frontend can still be previewed without a database.
 
 Smoke test: `https://<domain>/api/health` → `{"status":"ok"}`.
 

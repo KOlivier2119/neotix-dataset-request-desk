@@ -4,7 +4,7 @@
     "backend": {
       "root": "backend",
       "framework": "fastapi",
-      "buildCommand": "alembic upgrade head && python -m app.seed",
+      "buildCommand": "sh scripts/vercel_build.sh",
       "routes": [
         {
           "src": "/api/(.*)",

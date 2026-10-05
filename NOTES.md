@@ -73,10 +73,13 @@ top-level rewrites in `vercel.json`:
   codebase (`API_URL` = `http://api:8000`) is a local-dev/docker concern, so it stayed rather than
   becoming a binding nothing would read. Bindings also don't resolve at build time or in middleware,
   so the frontend's `proxy.ts` could not have used one anyway.
-- *Migrations live in `buildCommand`* (`alembic upgrade head && python -m app.seed`) because Vercel
-  runs no migration step, and project env vars — unlike bindings — do exist at build time. The cost
-  is that every deploy holding `DATABASE_URL` migrates *and seeds* whatever it points at, previews
-  included.
+- *Migrations live in `buildCommand`* (`sh scripts/vercel_build.sh` → `alembic upgrade head &&
+  python -m app.seed`) because Vercel runs no migration step, and project env vars — unlike
+  bindings — do exist at build time. The first deploy failed on the missing `DATABASE_URL`, so the
+  script is now fail-closed: production (or an unknown `VERCEL_ENV`) without `DATABASE_URL` fails
+  the build with instructions, while previews skip with a warning so the frontend can still ship.
+  The cost of the happy path remains that every deploy holding `DATABASE_URL` migrates *and seeds*
+  whatever it points at, previews included.
 
 ## 2. Deliberately left out / simplified
 
